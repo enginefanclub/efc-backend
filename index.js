@@ -17,11 +17,11 @@ io.on("connection", (socket) => {
     })
     socket.on('delsprite', (id)=>{
         socket.broadcast.emit('delsprite', id)
-        sprites.slice(sprites.indexOf(id), 1)
+        sprites.splice(sprites.indexOf(id), 1)
     })
     socket.on('disconnect', (id)=>{
         socket.broadcast.emit('delsprite', id)
-        sprites.slice(sprites.indexOf(id), 1)
+        sprites.splice(sprites.indexOf(id), 1)
     })
 })
 
