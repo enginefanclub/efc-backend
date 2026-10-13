@@ -27,14 +27,14 @@ io.on("connection", (socket) => {
             return;
         }
         console.log(`[${ip}] Add new critter`, id);
-        socket.broadcast.emit('addsprite', id)
+        socket.broadcast.emit('addsprite', ip, id)
         sprites.push({ ip, id, connected: true })
     })
     socket.on('delsprite', () => {
         let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             console.log(`[${ip}] Delete critter`, ipData.id);
-            socket.broadcast.emit('delsprite', ipData.id)
+            socket.broadcast.emit('delsprite', ip)
             sprites.splice(sprites.indexOf(ipData), 1)
         }
     })
@@ -42,7 +42,7 @@ io.on("connection", (socket) => {
         let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
-            socket.broadcast.emit('changesprite', id, ipData.id)
+            socket.broadcast.emit('changesprite', ip, id, ipData.id)
             ipData.id = newid;
         }
     })
@@ -55,7 +55,7 @@ io.on("connection", (socket) => {
                 if (ipData2) {
                     if (!ipData2.connected) {
                         console.log(`[${ip}] [Disconnect] Delete critter`, ipData.id);
-                        socket.broadcast.emit('delsprite', ipData.id)
+                        socket.broadcast.emit('delsprite', ip)
                         sprites.splice(sprites.indexOf(ipData), 1)
                     }
                 }
