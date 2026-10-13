@@ -15,7 +15,7 @@ const disconnectGrace = new Map();
 
 io.on("connection", (socket) => {
     const ip = (socket.handshake.auth && socket.handshake.auth.token) || "0";
-    socket.emit('reconnect', sprites.filter(x => x.ip != ip).map(x => x.id));
+    socket.emit('reconnect', sprites.filter(x => x.ip != ip));
 
     clearTimeout(disconnectGrace.get(ip))
     disconnectGrace.delete(ip)
