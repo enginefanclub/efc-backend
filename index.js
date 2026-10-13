@@ -43,7 +43,7 @@ io.on("connection", (socket) => {
         if (ipData) {
             console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
             socket.broadcast.emit('changesprite', ip, id, ipData.id)
-            ipData.id = newid;
+            ipData.id = id;
         }
     })
     socket.on('disconnect', () => {
