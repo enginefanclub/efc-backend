@@ -14,8 +14,8 @@ const sha512 = (str) => crypto.createHash('sha512').update(str).digest('hex');
 const disconnectGrace = new Map();
 
 io.on("connection", (socket) => {
-    const ip = sha512(socket.request.connection.remoteAddress);
-    socket.emit('reconnect', sprites.map(x => x.id));
+    const ip = (socket.handshake.auth && socket.handshake.auth.token) || "0";
+    socket.emit('reconnect', sprites.filter(x => x.ip != ip).map(x => x.id));
 
     clearTimeout(disconnectGrace.get(ip))
     disconnectGrace.delete(ip)
@@ -26,14 +26,14 @@ io.on("connection", (socket) => {
             ipData.connected = true;
             return;
         }
-        console.log("Add new critter", id);
+        console.log(`[${ip}] Add new critter`, id);
         socket.broadcast.emit('addsprite', id)
         sprites.push({ ip, id, connected: true })
     })
     socket.on('delsprite', () => {
         let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
-            console.log("Delete critter", ipData.id);
+            console.log(`[${ip}] Delete critter`, ipData.id);
             socket.broadcast.emit('delsprite', ipData.id)
             sprites.splice(sprites.indexOf(ipData), 1)
         }
@@ -41,7 +41,7 @@ io.on("connection", (socket) => {
     socket.on('changesprite', (id) => {
         let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
-            console.log(`Change sprite from ${ipData.id} to ${id}`);
+            console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
             socket.broadcast.emit('changesprite', id, ipData.id)
             ipData.id = newid;
         }
@@ -54,7 +54,7 @@ io.on("connection", (socket) => {
                 let ipData2 = sprites.find(x => x.ip == ip);
                 if (ipData2) {
                     if (!ipData2.connected) {
-                        console.log("[Disconnect] Delete critter", ipData.id);
+                        console.log(`[${ip}] [Disconnect] Delete critter`, ipData.id);
                         socket.broadcast.emit('delsprite', ipData.id)
                         sprites.splice(sprites.indexOf(ipData), 1)
                     }
