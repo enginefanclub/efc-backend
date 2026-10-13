@@ -21,7 +21,7 @@ io.on("connection", (socket) => {
     disconnectGrace.delete(ip)
 
     socket.on('addsprite', (id) => {
-        let ipData = sprites.find(x => x.ip == ipAddr);
+        let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             ipData.connected = true;
             return;
@@ -31,7 +31,7 @@ io.on("connection", (socket) => {
         sprites.push({ ip, id, connected: true })
     })
     socket.on('delsprite', () => {
-        let ipData = sprites.find(x => x.ip == ipAddr);
+        let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             console.log("Delete critter", ipData.id);
             socket.broadcast.emit('delsprite', ipData.id)
@@ -39,7 +39,7 @@ io.on("connection", (socket) => {
         }
     })
     socket.on('changesprite', (id) => {
-        let ipData = sprites.find(x => x.ip == ipAddr);
+        let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             console.log(`Change sprite from ${ipData.id} to ${id}`);
             socket.broadcast.emit('changesprite', id, ipData.id)
@@ -47,11 +47,11 @@ io.on("connection", (socket) => {
         }
     })
     socket.on('disconnect', () => {
-        let ipData = sprites.find(x => x.ip == ipAddr);
+        let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
             ipData.connected = false;
             disconnectGrace.set(ip, setTimeout(function() {
-                let ipData2 = sprites.find(x => x.ip == ipAddr);
+                let ipData2 = sprites.find(x => x.ip == ip);
                 if (ipData2) {
                     if (!ipData2.connected) {
                         console.log("[Disconnect] Delete critter", ipData.id);
