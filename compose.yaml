@@ -6,3 +6,5 @@ services:
       NODE_ENV: production
     ports:
       - "127.0.0.1:13844:3000"
+    volumes:
+      - EfcBackendData:/app/data
