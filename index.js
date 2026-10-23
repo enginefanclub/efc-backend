@@ -249,6 +249,78 @@ app.get("/users/:username", (req, res) => {
     return res.json(userData)
 })
 
+app.post("/users/:user/give", validator.body('key').notEmpty().isString(), validator.body('value').notEmpty().isString(), (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    let myUserBadges = req.user.badges;
+    try {
+        myUserBadges = JSON.parse(req.user.badges);
+    } catch (e) {
+        return res.status(500).send("what.")
+    }
+    if (!myUserBadges.includes("admin")) return res.sendStatus(403);
+    const result = validator.validationResult(req);
+    if (!result.isEmpty()) return res.status(400).json({ errors: result.array() })
+    const userData = db.prepare('SELECT * FROM users WHERE user_id = ?').get(req.params.user);
+    if (!userData) return res.sendStatus(404);
+    const { key, value } = req.body;
+    switch (key) {
+        case "icon": {
+            let realIcon = icons[value];
+            if (!realIcon) return res.status(400).send("i am a fat CAR!");
+            if (realIcon.default) return res.status(400).send("thats a default icon, silly!");
+            let userIcons = userData.exclusive_icons;
+            try {
+                userIcons = JSON.parse(userData.exclusive_icons);
+            } catch (e) {
+                return res.status(500).send("please contact firee because the json didnt parse right, heres their json: " + userIcons)
+            }
+            if (userIcons.includes(value)) return res.status(400).send("they already own that icon!");
+            userIcons.push(value);
+            db.prepare('UPDATE users SET exclusive_icons = ? WHERE user_id = ?').run(JSON.stringify(userIcons), userData.user_id);
+            res.sendStatus(200);
+            break;
+        }
+        case "badge": {
+            let realBadge = badges[value];
+            if (!realBadge) return res.status(400).send("i am a fat CAR!");
+            let userBadges = userData.badges;
+            try {
+                userBadges = JSON.parse(userData.badges);
+            } catch (e) {
+                return res.status(500).send("please contact firee because the json didnt parse right, heres their json: " + userBadges)
+            }
+            if (userBadges.includes(value)) return res.status(400).send("they already own that badge!");
+            userBadges.push(value);
+            db.prepare('UPDATE users SET badges = ? WHERE user_id = ?').run(JSON.stringify(userBadges), userData.user_id);
+            res.sendStatus(200);
+            break;
+        }
+        case "critter": {
+            let realCritter = critters[value];
+            if (!realCritter) return res.status(400).send("i am a fat CAR!");
+            let userCritters = userData.critters;
+            try {
+                userCritters = JSON.parse(userData.critters);
+            } catch (e) {
+                return res.status(500).send("please contact firee because the json didnt parse right, heres their json: " + userCritters)
+            }
+            if (userCritters.includes(value)) return res.status(400).send("they already own that critter!");
+            userCritters.push(value);
+            db.prepare('UPDATE users SET critters = ? WHERE user_id = ?').run(JSON.stringify(userCritters), userData.user_id);
+            res.sendStatus(200);
+            break;
+        }
+        default:
+            return res.status(400).send("Invalid key");
+    }
+})
+
+app.get("/users", (req, res) => {
+    let page = parseInt(req.query.page) || 0
+    if (isNaN(page) || page < 0) page = 0;
+    return res.json({users: db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected FROM users ORDER BY joined DESC LIMIT 20 OFFSET ?').all((20 * page)), count: db.prepare('SELECT count(*) FROM users').pluck().get()})
+})
+
 
 // verify stuff
 
@@ -272,6 +344,8 @@ io.on("connection", async (socket) => {
     if (userData == null) {
         socket.emit('youarespectator')
     }
+
+    if (token == "0" && ip == "0") return;
 
     clearTimeout(disconnectGrace.get(ip))
     disconnectGrace.delete(ip)
@@ -333,7 +407,7 @@ io.on("connection", async (socket) => {
                             console.log(`[${ip}] [Disconnect] Delete critter`, ipData.id);
                             socket.broadcast.emit('delsprite', ip)
                         } else {
-                            console.log(`[${ip}] [Disconnect] Delete spectator`, ipData.id);
+                            console.log(`[${ip}] [Disconnect] Delete spectator`);
                             socket.broadcast.emit('delspectator', ip)
                         }
                         sprites.splice(sprites.indexOf(ipData), 1)
