@@ -16,8 +16,8 @@ let db = new Database(require("path").resolve("./data/database.sqlite"), {
 
 const { RegExpMatcher, TextCensor, englishDataset, englishRecommendedTransformers } = require('obscenity');
 const matcher = new RegExpMatcher({
-	...englishDataset.build(),
-	...englishRecommendedTransformers,
+    ...englishDataset.build(),
+    ...englishRecommendedTransformers,
 });
 
 function println(str) {
@@ -26,21 +26,21 @@ function println(str) {
 
 /*
 CREATE TABLE "users" (
-	"user_id"	INTEGER NOT NULL DEFAULT 0,
-	"username"	TEXT NOT NULL DEFAULT 'User',
-	"password"	TEXT NOT NULL,
-	"salt"	TEXT NOT NULL,
-	"joined"	BLOB DEFAULT 0,
-	"lastOnline"	INTEGER DEFAULT 0,
-	"icon"	TEXT DEFAULT 'user',
-	"badges"	TEXT DEFAULT '[]',
-	"badgeColor"	TEXT DEFAULT '#000000',
-	"trophies"	TEXT DEFAULT '[]',
-	"critters"	TEXT DEFAULT '[''cat'']',
-	"token"	TEXT,
-	"critter_selected"	TEXT DEFAULT 'cat',
-	"exclusive_icons"	TEXT DEFAULT '[]',
-	PRIMARY KEY("user_id")
+    "user_id"	INTEGER NOT NULL DEFAULT 0,
+    "username"	TEXT NOT NULL DEFAULT 'User',
+    "password"	TEXT NOT NULL,
+    "salt"	TEXT NOT NULL,
+    "joined"	BLOB DEFAULT 0,
+    "lastOnline"	INTEGER DEFAULT 0,
+    "icon"	TEXT DEFAULT 'user',
+    "badges"	TEXT DEFAULT '[]',
+    "badgeColor"	TEXT DEFAULT '#000000',
+    "trophies"	TEXT DEFAULT '[]',
+    "critters"	TEXT DEFAULT '[''cat'']',
+    "token"	TEXT,
+    "critter_selected"	TEXT DEFAULT 'cat',
+    "exclusive_icons"	TEXT DEFAULT '[]',
+    PRIMARY KEY("user_id")
 );
 */
 
@@ -48,8 +48,10 @@ let critters = {};
 let badges = {};
 let icons = {};
 let trophies = {};
+let seasonal = [];
 
 const validator = require('express-validator');
+const { json } = require("body-parser");
 
 let sprites = []
 
@@ -66,13 +68,13 @@ function validateUsername(username) {
     if (username.length > USERNAME_LENGTH_MAX) return "Please enter in a username that is less than than 20 characters!";
     if (!/^[a-zA-Z0-9_]+$/.test(username)) return "Usernames cannot contain any special characters! They can only contain letters, numbers, and an underscore.";
     if (matcher.hasMatch(username.trim())) return "Profanity is not allowed in usernames!";
-    if (["login","register"].includes(username.toLowerCase().trim())) return "illegal";
+    if (["login", "register"].includes(username.toLowerCase().trim())) return "illegal";
     return null;
 }
 
 function verifyToken(token) {
     return new Promise((resolve, reject) => {
-        const userData = db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critters, critter_selected, exclusive_icons FROM users WHERE token = ?').get(token);
+        const userData = db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critters, critter_selected, exclusive_icons, banner_selected, banners, candies FROM users WHERE token = ?').get(token);
         if (!userData) return reject("Invalid token");
         resolve(userData);
     })
@@ -200,7 +202,7 @@ app.post("/settings/password", validator.body('password').notEmpty().isString(),
     const { password } = req.body;
     if (password.length < 8) return res.status(406).send("Please enter in a password that is longer than 8 characters!");
     if (password.length > 1024) return res.status(406).send("calm down");
-    return bcrypt.hash(`${userData.salt}.${password}`, 10, function(err, hash) {
+    return bcrypt.hash(`${userData.salt}.${password}`, 10, function (err, hash) {
         if (err) return res.status(500).send("An error occured while trying to hash the password.");
         db.prepare('UPDATE users SET password = ? WHERE user_id = ?').run(hash, req.user.user_id);
         res.sendStatus(200);
@@ -216,7 +218,7 @@ app.post("/settings/icon", validator.body('icon').notEmpty().isString(), async (
         let exclusive = [];
         try {
             exclusive = JSON.parse(req.user.exclusive_icons);
-        } catch(_) {}
+        } catch (_) { }
         if (!realIcon.default && !exclusive.includes(icon)) {
             return res.status(400).send("YOU THINK YOU HAVE THE RIGHT TO USE SUCH GLORY AS THIS!?!?! KNOW YOUR PLACE PEASANT!!!")
         }
@@ -315,10 +317,296 @@ app.post("/users/:user/give", validator.body('key').notEmpty().isString(), valid
     }
 })
 
+const keyMap = new Map();
+
+function checkTrophyRequirements(userdata, trophyid, visitedPage = false) {
+    if (!(trophyid in trophies)) return false;
+    let getTrophyO = trophies[trophyid]
+    if ("req" in getTrophyO) {
+
+        let combinedUserInv = []
+
+        let reqUserData = {
+            exclusive_icons: [],
+            critters: [],
+            page: visitedPage,
+        }
+        try {
+            reqUserData.exclusive_icons = JSON.parse(userdata.exclusive_icons);
+            reqUserData.critters = JSON.parse(userdata.critters);
+            let getUserTrophies = JSON.parse(userdata.trophies);
+
+            if (getUserTrophies.includes(trophyid)) return false;
+
+            combinedUserInv = combinedUserInv.concat(reqUserData.exclusive_icons)
+            combinedUserInv = combinedUserInv.concat(reqUserData.critters)
+        } catch (e) {
+            // if json is corrupted
+        }
+
+        let getTrophyReq = Object.keys(getTrophyO.req)
+
+        let combinedReqs = []
+
+        for (let i = 0; i < getTrophyReq.length; i++) {
+            const key = getTrophyReq[i];
+            let getReq = getTrophyO.req[key];
+            if (key == "page" && visitedPage == getReq) { // 99% of current trophies are just "go to page to get trophy"
+                break;
+            }
+            if (key == "all_hw") {
+                return seasonal.every(item => {
+                    if (item.type == "icon") {
+                        return reqUserData.exclusive_icons.includes(item.id)
+                    } else if (item.type == "critter") {
+                        return reqUserData.critters.includes(item.id)
+                    } else {
+                        return false;
+                    }
+                });                   
+            }
+
+            if (!reqUserData[getReq]) return false;
+
+            combinedReqs = combinedReqs.concat(getReq)
+        }
+
+        if (!visitedPage) {
+            return combinedReqs.filter(requiredItem => combinedUserInv.includes(requiredItem)).length == combinedReqs.length
+        } else {
+            return getTrophyO.req["page"] == visitedPage
+        }
+        
+    } else {
+        return false;
+    }
+}
+
+app.post("/grant", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    try {
+        req.user.trophies = JSON.parse(req.user.trophies);
+    } catch (e) {
+        return res.status(500).send("what.")
+    }
+
+    let reqUserData = {
+        exclusive_icons: [],
+        critters: []
+    }
+    try {
+        reqUserData.exclusive_icons = JSON.parse(userdata.exclusive_icons);
+        reqUserData.critters = JSON.parse(userdata.critters);
+    } catch (e) {
+        // if json is corrupted
+    }
+
+    let grantTypes = {
+        icon: icons,
+        critter: critters,
+        trophy: trophies,
+    }
+
+    const getSentData = req.body
+    if (!getSentData.type) return res.status(400).json({ res: "fail", reason: "Didn't include a type. INCLUDE A TYPE!" });
+    if (!getSentData.id) return res.status(400).json({ res: "fail", reason: "Didn't include an id. INCLUDE AN ID!" });
+
+    let getJson = grantTypes[getSentData.type];
+    if (!getJson) return res.status(400).json({ res: "fail", reason: `${getSentData.type} is not a real type!`})
+    let getObject = getJson[getSentData.id]
+    if (!getObject) return res.status(400).json({ res: "fail", reason: `${getSentData.id} is not a real id!`})
+
+    if (getSentData.type != "trophy") {
+        //more modular stuff heresies
+    } else {
+        // lets test this, so i want you to like, make a random thing that does a POST request to this route http://localhost:3000/grant
+        if (checkTrophyRequirements(req.user, getSentData.id, req.body.visited ? req.body.visited : false)) {
+            // what u want to do erm req.user does that...
+            // u dont need to retrieve user info again when req.user does that, see verifyToken
+            //req.user.trophies = 
+            // ITS NOT AN ok hold on
+            // its because sqlite doesnt accept json values
+            if (req.user.trophies.includes(getSentData.id)) return res.sendStatus(403);
+            req.user.trophies.push(getSentData.id)
+            db.prepare("UPDATE users SET trophies = ? WHERE user_id = ?").run(JSON.stringify(req.user.trophies), req.user.user_id)
+
+            let trophy = trophies[getSentData.id];
+            if (trophy && trophy.req && trophy.req.all_hw) {
+
+            }
+            if (trophy && trophy.reward) {
+                const keys = Object.keys(trophy.reward);
+                for (let i = 0; i < keys.length; i++) {
+                    const key = keys[i];
+                    const value = trophy.reward[key];
+                    switch (key) {
+                        case "exclusive_icons":
+                        case "badges":
+                        case "critters":
+                        break;
+                        default:
+                            return res.sendStatus(501);
+                    }
+                    let arr = [];
+                    try {
+                        arr = JSON.parse(req.user[key])
+                    } catch (e) {
+                        return res.sendStatus(500);
+                    }
+                    arr = arr.concat(Array.isArray(value) ? value : [value])
+                    arr = arr.filter((item, index) => arr.indexOf(item) === index); // remove duplicates because funny
+                    db.prepare(`UPDATE users SET ${key} = ? WHERE user_id = ?`).run(JSON.stringify(arr), req.user.user_id);
+                }
+            }
+            res.sendStatus(200);
+            //i. want. to return a success so i can display it omg hold on
+            //wait
+            // frontend /scripts/tools/trophy.js
+            // ?
+        } else {
+            res.status(400).json({res: "fail", reason: `get out`})
+        }
+
+    }
+})
+
+
+app.post("/random", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    if (!Array.isArray(seasonal) || seasonal.length == 0) return res.sendStatus(500);
+    let reqUserData = {
+        exclusive_icons: [],
+        critters: []
+    }
+    try {
+        reqUserData.exclusive_icons = JSON.parse(req.user.exclusive_icons);
+        reqUserData.critters = JSON.parse(req.user.critters);
+    } catch (e) {
+        return res.status(500).send("please contact firee because the json didnt parse right")
+        // if json is corrupted
+    }
+    let filterArr = seasonal.filter(reward => {
+        switch (reward.type) {
+            case "icon":
+                return !reqUserData.exclusive_icons.includes(reward.id);
+            case "critter":
+                return !reqUserData.critters.includes(reward.id);
+            default:
+                return false;
+        }
+    });
+    if (filterArr.length == 0) return res.status(400).send("no items to give, sobbing")
+    const randomReward = filterArr[Math.floor(Math.random() * filterArr.length)];
+    switch (randomReward.type) {
+        case "icon":
+            reqUserData.exclusive_icons.push(randomReward.id);
+            break;
+        case "critter":
+            reqUserData.critters.push(randomReward.id);
+            break;
+        default:
+            return res.status(500).send("please contact firee because omg what type is this")
+    }
+    db.prepare('UPDATE users SET exclusive_icons = ?, critters = ? WHERE user_id = ?').run(
+        JSON.stringify(reqUserData.exclusive_icons),
+        JSON.stringify(reqUserData.critters),
+        req.user.user_id
+    );
+    return res.json(randomReward)
+})
+
+app.post("/buy/:item", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    const item = req.params.item;
+    let reqUserData = {
+        exclusive_icons: [],
+        critters: [],
+        trophies: []
+    }
+    try {
+        reqUserData.exclusive_icons = JSON.parse(req.user.exclusive_icons);
+        reqUserData.critters = JSON.parse(req.user.critters);
+        reqUserData.trophies = JSON.parse(req.user.trophies);
+    } catch (e) {
+        return res.status(500).send("please contact firee because the json didnt parse right")
+        // if json is corrupted
+    }
+    if (reqUserData.critters.includes(item) || reqUserData.exclusive_icons.includes(item)) return res.status(403).send("You already bought that!");
+    if (critters[item] && critters[item].price) {
+        if (req.user.candies < critters[item].price) return res.status(403).send("Not enough candies!");
+        reqUserData.critters.push(item);
+        db.prepare('UPDATE users SET candies = candies - ?, critters = ? WHERE user_id = ?').run(critters[item].price, JSON.stringify(reqUserData.critters), req.user.user_id);
+    } else if (icons[item] && icons[item].price) {
+        if (req.user.candies < icons[item].price) return res.status(403).send("Not enough candies!");
+        reqUserData.exclusive_icons.push(item);
+        db.prepare('UPDATE users SET candies = candies - ?, exclusive_icons = ? WHERE user_id = ?').run(icons[item].price, JSON.stringify(reqUserData.exclusive_icons), req.user.user_id);
+    } else {
+        return res.sendStatus(404);
+    }
+    if (seasonal.every(item => {
+        if (item.type == "icon") {
+            return reqUserData.exclusive_icons.includes(item.id)
+        } else if (item.type == "critter") {
+            return reqUserData.critters.includes(item.id)
+        } else {
+            return false;
+        }
+    })) {
+        if (!reqUserData.trophies.includes("2026hw")) {
+            reqUserData.trophies.push("2026hw")
+            db.prepare("UPDATE users SET trophies = ? WHERE user_id = ?").run(JSON.stringify(reqUserData.trophies), req.user.user_id)
+        }
+    }
+
+    return res.sendStatus(200);
+})
+
+//1793404801000
+const HWDATE = Date.now() - 10
+// 1793491200000
+const EXPIRY = 1793491200000
+
+const cooldown = new Map();
+
+function checkCooldown(user_id) {
+    const now = Date.now();
+    const last = cooldown.get(user_id);
+    const remaining = 180_000 - (now - last);
+    if (remaining > 0) return false;
+    cooldown.set(user_id, now);
+    return true;
+}
+
+app.post("/doreme", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+
+    if (Date.now() < HWDATE) return res.status(403).send("TIME!");
+    if (Date.now() > EXPIRY) return res.status(403).send("TIME!");
+
+    if (!checkCooldown(req.user.user_id + "_" + req.body.door_id)) {
+        console.log(cooldown)
+        return res.status(403).send("YOU'RE TOO FAST!");
+    }
+
+    let rolled = "good"
+    if (Math.random() <= 0.6) rolled = "bad";
+
+    let handout = Math.floor(Math.random() * 5) + 1;
+
+    if (rolled == "good") {
+        handout += Math.floor(Math.random() * 10) + 1;
+    }
+
+    db.prepare('UPDATE users SET candies = candies + ? WHERE user_id = ?').run(handout, req.user.user_id);
+
+    res.status(200).send({rolled, handout, candy: req.user.candies + handout})
+})
+
 app.get("/users", (req, res) => {
     let page = parseInt(req.query.page) || 0
     if (isNaN(page) || page < 0) page = 0;
-    return res.json({users: db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected FROM users ORDER BY joined DESC LIMIT 20 OFFSET ?').all((20 * page)), count: db.prepare('SELECT count(*) FROM users').pluck().get()})
+    return res.json({ users: db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected FROM users ORDER BY joined DESC LIMIT 20 OFFSET ?').all((20 * page)), count: db.prepare('SELECT count(*) FROM users').pluck().get() })
 })
 
 
@@ -425,10 +713,16 @@ app.all('/', (_, res) => {
 server.listen(3000, async () => {
     console.log("Listening on port 3000!");
     try {
-        critters = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/critters.json")).json();
+        /*critters = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/critters.json")).json();
         badges = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/badges.json")).json();
         icons = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/icons.json")).json();
         trophies = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/trophies.json")).json();
+        seasonal = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/seasonal/halloween_rewards.json")).json();*/
+        critters = await (await fetch("http://localhost:5500/assets/jsons/critters.json")).json();
+        badges = await (await fetch("http://localhost:5500/assets/jsons/profile/badges.json")).json();
+        icons = await (await fetch("http://localhost:5500/assets/jsons/profile/icons.json")).json();
+        trophies = await (await fetch("http://localhost:5500/assets/jsons/profile/trophies.json")).json();
+        seasonal = await (await fetch("http://localhost:5500/assets/jsons/seasonal/halloween_rewards.json")).json();
     } catch (e) {
         console.log("Couldn't get some URLS!");
         console.error(e)
