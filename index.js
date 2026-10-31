@@ -478,11 +478,13 @@ app.post("/random", (req, res) => {
     if (!Array.isArray(seasonal) || seasonal.length == 0) return res.sendStatus(500);
     let reqUserData = {
         exclusive_icons: [],
-        critters: []
+        critters: [],
+        trophies: []
     }
     try {
         reqUserData.exclusive_icons = JSON.parse(req.user.exclusive_icons);
         reqUserData.critters = JSON.parse(req.user.critters);
+        reqUserData.trophies = JSON.parse(req.user.trophies)
     } catch (e) {
         return res.status(500).send("please contact firee because the json didnt parse right")
         // if json is corrupted
