@@ -363,7 +363,7 @@ function checkTrophyRequirements(userdata, trophyid, visitedPage = false) {
                     } else {
                         return false;
                     }
-                });                   
+                });
             }
 
             if (!reqUserData[getReq]) return false;
@@ -376,7 +376,7 @@ function checkTrophyRequirements(userdata, trophyid, visitedPage = false) {
         } else {
             return getTrophyO.req["page"] == visitedPage
         }
-        
+
     } else {
         return false;
     }
@@ -412,9 +412,9 @@ app.post("/grant", (req, res) => {
     if (!getSentData.id) return res.status(400).json({ res: "fail", reason: "Didn't include an id. INCLUDE AN ID!" });
 
     let getJson = grantTypes[getSentData.type];
-    if (!getJson) return res.status(400).json({ res: "fail", reason: `${getSentData.type} is not a real type!`})
+    if (!getJson) return res.status(400).json({ res: "fail", reason: `${getSentData.type} is not a real type!` })
     let getObject = getJson[getSentData.id]
-    if (!getObject) return res.status(400).json({ res: "fail", reason: `${getSentData.id} is not a real id!`})
+    if (!getObject) return res.status(400).json({ res: "fail", reason: `${getSentData.id} is not a real id!` })
 
     if (getSentData.type != "trophy") {
         //more modular stuff heresies
@@ -443,7 +443,7 @@ app.post("/grant", (req, res) => {
                         case "exclusive_icons":
                         case "badges":
                         case "critters":
-                        break;
+                            break;
                         default:
                             return res.sendStatus(501);
                     }
@@ -464,7 +464,7 @@ app.post("/grant", (req, res) => {
             // frontend /scripts/tools/trophy.js
             // ?
         } else {
-            res.status(400).json({res: "fail", reason: `get out`})
+            res.status(400).json({ res: "fail", reason: `get out` })
         }
 
     }
@@ -512,6 +512,22 @@ app.post("/random", (req, res) => {
         JSON.stringify(reqUserData.critters),
         req.user.user_id
     );
+
+    if (seasonal.every(item => {
+        if (item.type == "icon") {
+            return reqUserData.exclusive_icons.includes(item.id)
+        } else if (item.type == "critter") {
+            return reqUserData.critters.includes(item.id)
+        } else {
+            return false;
+        }
+    })) {
+        if (!reqUserData.trophies.includes("2026hw")) {
+            reqUserData.trophies.push("2026hw")
+            db.prepare("UPDATE users SET trophies = ? WHERE user_id = ?").run(JSON.stringify(reqUserData.trophies), req.user.user_id)
+        }
+    }
+
     return res.json(randomReward)
 })
 
@@ -600,7 +616,7 @@ app.post("/doreme", (req, res) => {
 
     db.prepare('UPDATE users SET candies = candies + ? WHERE user_id = ?').run(handout, req.user.user_id);
 
-    res.status(200).send({rolled, handout, candy: req.user.candies + handout})
+    res.status(200).send({ rolled, handout, candy: req.user.candies + handout })
 })
 
 app.get("/users", (req, res) => {
