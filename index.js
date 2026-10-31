@@ -248,7 +248,7 @@ app.get("/myself", (req, res) => {
 })
 
 app.get("/users/:username", (req, res) => {
-    const userData = db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected FROM users WHERE username = ?').get(req.params.username);
+    const userData = db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected, candies FROM users WHERE username = ?').get(req.params.username);
     if (!userData) return res.sendStatus(404);
     return res.json(userData)
 })
