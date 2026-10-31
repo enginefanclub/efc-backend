@@ -202,6 +202,8 @@ app.post("/settings/password", validator.body('password').notEmpty().isString(),
     const { password } = req.body;
     if (password.length < 8) return res.status(406).send("Please enter in a password that is longer than 8 characters!");
     if (password.length > 1024) return res.status(406).send("calm down");
+    const userData = db.prepare('SELECT salt FROM users WHERE user_id = ?').get(req.user.user_id);
+    if (!userData) return res.sendStatus(403);
     return bcrypt.hash(`${userData.salt}.${password}`, 10, function (err, hash) {
         if (err) return res.status(500).send("An error occured while trying to hash the password.");
         db.prepare('UPDATE users SET password = ? WHERE user_id = ?').run(hash, req.user.user_id);
