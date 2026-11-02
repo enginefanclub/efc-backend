@@ -702,12 +702,19 @@ io.on("connection", async (socket) => {
         if (ipData) {
             if (userData) {
                 try {
-                    let usercritters = JSON.parse(userData.critters);
-                    if (usercritters.includes(id) || critters[id].default == true) {
+                    if (critters[id].default == true) {
                         db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
                         console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
                         socket.broadcast.emit('changesprite', ip, id, ipData.id, userData.username)
                         ipData.id = id;
+                    } else {
+                        let usercritters = JSON.parse(userData.critters);
+                        if (usercritters.includes(id)) {
+                            db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
+                            console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
+                            socket.broadcast.emit('changesprite', ip, id, ipData.id, userData.username)
+                            ipData.id = id;
+                        }
                     }
                 } catch (e) {
                     console.log(e)
