@@ -631,7 +631,7 @@ app.get("/users", (req, res) => {
 app.get("/leaderboard", (req,res)=>{
     //leaderboard?by=candies
     let by = req.query.by || ""
-    if (["candies"].includes(by)) return res.status(400).send(`no query found or not allowed`);
+    if (!["candies"].includes(by)) return res.status(400).send(`no query found or not allowed`);
     try {
         return res.json({list: db.prepare(`SELECT user_id, username, icon, candies FROM users ORDER BY ? DESC LIMIT 10`).all(by)})
     } catch (e) {
@@ -702,8 +702,8 @@ io.on("connection", async (socket) => {
         if (ipData) {
             if (userData) {
                 try {
-                    let critters = JSON.parse(userData.critters);
-                    if (!critters.includes(id)) return;
+                    let usercritters = JSON.parse(userData.critters);
+                    if (!usercritters.includes(id) && critters[id].default != true) return;
                     db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
                     console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
                     socket.broadcast.emit('changesprite', ip, id, ipData.id, userData.username)
@@ -745,16 +745,16 @@ app.all('/', (_, res) => {
 server.listen(3000, async () => {
     console.log("Listening on port 3000!");
     try {
-        /*critters = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/critters.json")).json();
+        critters = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/critters.json")).json();
         badges = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/badges.json")).json();
         icons = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/icons.json")).json();
         trophies = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/profile/trophies.json")).json();
-        seasonal = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/seasonal/halloween_rewards.json")).json();*/
-        critters = await (await fetch("http://localhost:5500/assets/jsons/critters.json")).json();
+        seasonal = await (await fetch("https://efc.nefarkitti.dev/assets/jsons/seasonal/halloween_rewards.json")).json();
+        /*critters = await (await fetch("http://localhost:5500/assets/jsons/critters.json")).json();
         badges = await (await fetch("http://localhost:5500/assets/jsons/profile/badges.json")).json();
         icons = await (await fetch("http://localhost:5500/assets/jsons/profile/icons.json")).json();
         trophies = await (await fetch("http://localhost:5500/assets/jsons/profile/trophies.json")).json();
-        seasonal = await (await fetch("http://localhost:5500/assets/jsons/seasonal/halloween_rewards.json")).json();
+        seasonal = await (await fetch("http://localhost:5500/assets/jsons/seasonal/halloween_rewards.json")).json();*/
     } catch (e) {
         console.log("Couldn't get some URLS!");
         console.error(e)
