@@ -710,6 +710,7 @@ io.on("connection", async (socket) => {
                         ipData.id = id;
                     }
                 } catch (e) {
+                    console.log(e)
                     console.error(`[${ip}] Couldn't change sprite, JSON invalid?`)
                 }
             }
