@@ -703,6 +703,8 @@ io.on("connection", async (socket) => {
             if (userData) {
                 try {
                     let usercritters = JSON.parse(userData.critters);
+                    console.log(usercritters)
+                    console.log(critters[id])
                     if (!usercritters.includes(id) && critters[id].default != true) return;
                     db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
                     console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
