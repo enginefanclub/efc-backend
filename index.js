@@ -628,12 +628,12 @@ app.get("/users", (req, res) => {
     if (isNaN(page) || page < 0) page = 0;
     return res.json({ users: db.prepare('SELECT user_id, username, joined, lastOnline, icon, badges, badgeColor, trophies, critter_selected FROM users ORDER BY joined DESC LIMIT 20 OFFSET ?').all((20 * page)), count: db.prepare('SELECT count(*) FROM users').pluck().get() })
 })
-app.get("/leaderboard", (req,res)=>{
+app.get("/leaderboard", (req, res) => {
     //leaderboard?by=candies
     let by = req.query.by || ""
     if (!["candies"].includes(by)) return res.status(400).send(`no query found or not allowed`);
     try {
-        return res.json({list: db.prepare(`SELECT user_id, username, icon, candies FROM users ORDER BY ? DESC LIMIT 10`).all(by)})
+        return res.json({ list: db.prepare(`SELECT user_id, username, icon, candies FROM users ORDER BY ? DESC LIMIT 10`).all(by) })
     } catch (e) {
         return res.status(400).send(e)
     }
@@ -703,13 +703,12 @@ io.on("connection", async (socket) => {
             if (userData) {
                 try {
                     let usercritters = JSON.parse(userData.critters);
-                    console.log(usercritters)
-                    console.log(critters[id])
-                    if (!usercritters.includes(id) && critters[id].default != true) return;
-                    db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
-                    console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
-                    socket.broadcast.emit('changesprite', ip, id, ipData.id, userData.username)
-                    ipData.id = id;
+                    if (usercritters.includes(id) || critters[id].default == true) {
+                        db.prepare('UPDATE users SET critter_selected = ? WHERE user_id = ?').run(id, userData.user_id);
+                        console.log(`[${ip}] Change sprite from ${ipData.id} to ${id}`);
+                        socket.broadcast.emit('changesprite', ip, id, ipData.id, userData.username)
+                        ipData.id = id;
+                    }
                 } catch (e) {
                     console.error(`[${ip}] Couldn't change sprite, JSON invalid?`)
                 }
