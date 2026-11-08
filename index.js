@@ -343,7 +343,7 @@ app.post("/createpoll", (req, res) => {
 })
 app.post("/vote", (req, res) => {
     if (!req.user) return res.sendStatus(400);
-    if (!req.body.voting) return res.sendStatus(400);
+    if (req.body.voting == undefined) return res.sendStatus(400);
     if (!req.body.pollid) return res.sendStatus(400);
     try {
         const userData = req.user
