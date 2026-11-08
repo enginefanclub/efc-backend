@@ -252,7 +252,6 @@ app.get("/users/:username", (req, res) => {
     if (!userData) return res.sendStatus(404);
     return res.json(userData)
 })
-
 app.post("/users/:user/give", validator.body('key').notEmpty().isString(), validator.body('value').notEmpty().isString(), (req, res) => {
     if (!req.user) return res.sendStatus(401);
     let myUserBadges = req.user.badges;
@@ -316,6 +315,26 @@ app.post("/users/:user/give", validator.body('key').notEmpty().isString(), valid
         }
         default:
             return res.status(400).send("Invalid key");
+    }
+})
+
+app.post("/users/prune", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    let myUserBadges = req.user.badges;
+    try {
+        myUserBadges = JSON.parse(req.user.badges);
+    } catch (e) {
+        return res.status(500).send("what.")
+    }
+    if (!myUserBadges.includes("admin")) return res.sendStatus(403);
+    try {
+        console.log(req.body)
+        let getUserId = req.body.user_id
+        db.prepare("DELETE FROM users WHERE user_id = ?").run(getUserId)
+        return res.sendStatus(200)
+    } catch (e) {
+        console.log(e)
+        return res.status(400).send(e)
     }
 })
 
