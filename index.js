@@ -319,6 +319,66 @@ app.post("/users/:user/give", validator.body('key').notEmpty().isString(), valid
     }
 })
 
+app.post("/createpoll", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    let myUserBadges = req.user.badges;
+    try {
+        myUserBadges = JSON.parse(req.user.badges);
+    } catch (e) {
+        return res.status(500).send("what.")
+    }
+    if (!myUserBadges.includes("admin")) return res.sendStatus(403);
+    try {
+        let votes = []
+        req.body.options.forEach(option => {
+            votes.push([])
+        })
+        db.prepare('INSERT INTO polls (title, desc, options, expiry, votes) VALUES (?, ?, ?, ?, ?)')
+            .run(req.body.title, req.body.desc, JSON.stringify(req.body.options), req.body.expiry, JSON.stringify(votes));
+        return res.sendStatus(200)
+    } catch (e) {
+        console.log(e)
+        return res.status(400).send(e)
+    }
+})
+app.post("/vote", (req, res) => {
+    if (!req.user) return res.sendStatus(400);
+    if (!req.body.voting) return res.sendStatus(400);
+    if (!req.body.pollid) return res.sendStatus(400);
+    try {
+        const userData = req.user
+        let getPoll = db.prepare(`SELECT id, votes, expiry FROM polls WHERE id = ?`).get(req.body.pollid)
+        if (!getPoll) return res.sendStatus(400);
+        if (getPoll.expiry <= Date.now()) return res.status(400).send("cant vote anymore bubster")
+        getPoll.votes = JSON.parse(getPoll.votes)
+        console.log(`BEFORE REMOVAL: `, getPoll.votes)
+        for (let i = 0; i < getPoll.votes.length; i++) {
+            const optionVotes = getPoll.votes[i];
+            if (optionVotes.includes(userData.user_id)) {
+                getPoll.votes[i].splice(getPoll.votes[i].indexOf(userData.user_id), 1)
+                console.log("removing")
+            }
+        }
+        console.log(`AFTER REMOVAL:`, getPoll.votes)
+        if (getPoll.votes[req.body.voting]) {
+            getPoll.votes[req.body.voting].push(userData.user_id)
+            db.prepare('UPDATE polls SET votes = ? WHERE id = ?').run(JSON.stringify(getPoll.votes), req.body.pollid);
+        }
+        return res.sendStatus(200)
+    } catch (e) {
+        console.log(e)
+        return res.status(400).send("somehow something went wrong when voting")
+    }
+})
+app.get("/getpolls", (req, res) => {
+    //let index = req.query.index || ""
+    try {
+        return res.json({ list: db.prepare(`SELECT id, title, desc, options, votes, expiry FROM polls ORDER BY id`).all() })
+    } catch (e) {
+        return res.status(400).send(`somehow something went wrong when grabbing polls`)
+    }
+})
+
 const keyMap = new Map();
 
 function checkTrophyRequirements(userdata, trophyid, visitedPage = false) {
@@ -638,11 +698,6 @@ app.get("/leaderboard", (req, res) => {
         return res.status(400).send(e)
     }
 })
-
-app.get("/test", (req, res) => {
-    return res.status(200).send(`OK`)
-})
-
 // announcement?
 
 
