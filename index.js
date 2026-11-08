@@ -330,6 +330,7 @@ app.post("/users/prune", (req, res) => {
     try {
         console.log(req.body)
         let getUserId = req.body.user_id
+        if (!getUserId) return res.status(400).send("no user id")
         db.prepare("DELETE FROM users WHERE user_id = ?").run(getUserId)
         return res.sendStatus(200)
     } catch (e) {
