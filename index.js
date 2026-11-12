@@ -54,6 +54,8 @@ const validator = require('express-validator');
 const { json } = require("body-parser");
 
 let sprites = []
+let announcements = []
+let annInc = 0
 
 const io = new Server(server, {
     cors: {
@@ -78,6 +80,28 @@ function verifyToken(token) {
         if (!userData) return reject("Invalid token");
         resolve(userData);
     })
+}
+
+let threshold = 2628000000 // 1 month
+function userEligibility(userData) {
+    if (userData.badges.includes("verified")) return true;
+    if (Date.now() - userData.joined >= threshold) return true;
+    return false
+}
+const adminTier = {
+    ADMIN: 1,
+    MODERATOR: 2,
+}
+function isAuthorised(userData) {
+    if (userData.badges.includes("admin")) return adminTier.ADMIN;
+    if (userData.badges.includes("moderator")) return adminTier.MODERATOR;
+    return false
+}
+
+function clamp(value, min, max) {
+    if (value <= min) return min;
+    if (value >= max) return max;
+    return value;
 }
 
 app.set('trust proxy', 1);
@@ -317,7 +341,43 @@ app.post("/users/:user/give", validator.body('key').notEmpty().isString(), valid
             return res.status(400).send("Invalid key");
     }
 })
-
+app.post("/announcement", (req, res) => {
+    if (!req.user) return res.sendStatus(401);
+    let myUserBadges = req.user.badges;
+    try {
+        myUserBadges = JSON.parse(req.user.badges);
+    } catch (e) {
+        return res.status(500).send("what.")
+    }
+    try {
+        const userData = req.user
+        if (!isAuthorised(userData)) return res.sendStatus(401);
+        if (!req.body.content) return res.status(500).send("where is the content");
+        if (!req.body.duration) return res.status(500).send("where is the duration");
+        if (matcher.hasMatch(req.body.content.trim())) return res.status(500).send("why are you using profanity");
+        if (io) {
+            annInc++
+            let duration = req.body.duration
+            if (isAuthorised(userData) == adminTier.MODERATOR) duration = clamp(duration, 1, 10)
+            let announcementPacket = {
+                id: annInc,
+                author: userData.username,
+                content: req.body.content,
+                duration: req.body.duration * 1000,
+                started: Date.now(),
+            }
+            announcements.push(announcementPacket)
+            io.emit("announcement", announcementPacket)
+            setTimeout(() => {
+                announcements.splice(announcements.map(e => e.id).indexOf(announcementPacket.id), 1)
+                console.log("cleaned")
+            }, duration * 1000);
+            return res.sendStatus(200)
+        }
+    } catch (e) {
+        return res.status(500).send("what")
+    }
+})
 app.post("/users/prune", (req, res) => {
     if (!req.user) return res.sendStatus(401);
     let myUserBadges = req.user.badges;
@@ -369,7 +429,8 @@ app.post("/vote", (req, res) => {
         const userData = req.user
         let getPoll = db.prepare(`SELECT id, votes, expiry FROM polls WHERE id = ?`).get(req.body.pollid)
         if (!getPoll) return res.sendStatus(400);
-        if (getPoll.expiry <= Date.now()) return res.status(400).send("cant vote anymore bubster")
+        if (!userEligibility(userData)) return res.status(400).send("you are not eligibile to vote");
+        if (getPoll.expiry <= Date.now()) return res.status(400).send("cant vote anymore bubster");
         getPoll.votes = JSON.parse(getPoll.votes)
         console.log(`BEFORE REMOVAL: `, getPoll.votes)
         for (let i = 0; i < getPoll.votes.length; i++) {
@@ -738,7 +799,7 @@ io.on("connection", async (socket) => {
         } catch (e) { }
     }
 
-    socket.emit('reconnect', sprites.filter(x => x.ip != ip));
+    socket.emit('reconnect', sprites.filter(x => x.ip != ip), announcements);
 
     if (userData == null) {
         socket.emit('youarespectator')
@@ -748,7 +809,6 @@ io.on("connection", async (socket) => {
 
     clearTimeout(disconnectGrace.get(ip))
     disconnectGrace.delete(ip)
-
     socket.on('addsprite', () => {
         let ipData = sprites.find(x => x.ip == ip);
         if (ipData) {
