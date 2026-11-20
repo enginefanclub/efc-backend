@@ -8,3 +8,7 @@ services:
       - "127.0.0.1:13844:3000"
     volumes:
       - EfcBackendData:/app/data
+    deploy:
+      resources:
+        limits:
+          memory: 1g
